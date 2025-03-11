@@ -10,5 +10,9 @@ setup(
     license='unlicense',
     packages=['cdk-pipeline'],
     zip_safe=False,
-    requires=['aws-cdk-lib', 'pyyaml', 'constructs>=10.0.0,<11.0.0']
+    install_requires=[
+        'aws-cdk-lib',
+        'pyyaml',
+        'constructs>=10.0.0,<11.0.0'
+    ]
 )
