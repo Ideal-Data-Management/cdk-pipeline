@@ -97,7 +97,7 @@ class AbstractPipelineStack(Stack):
         """
         return pipelines.CodePipeline(
             self,
-            "Pipeline",
+            f"{self.stack_class.__name__}Pipeline",
             cross_account_keys=True,
             code_build_defaults=pipelines.CodeBuildOptions(
                 build_environment=codebuild.BuildEnvironment(
@@ -229,7 +229,7 @@ class AbstractPipelineStack(Stack):
         if not self.pipeline_config.notification_emails:
             return
 
-        topic = sns.Topic(self, "PipelineNotificationsTopic")
+        topic = sns.Topic(self, f"{self.stack_class.__name__}PipelineNotificationsTopic")
         
         topic.add_subscription(
             *[subscriptions.EmailSubscription(email) 
@@ -238,7 +238,7 @@ class AbstractPipelineStack(Stack):
         
         notifications.NotificationRule(
             self,
-            "PipelineNotificationRule",
+            f"{self.stack_class.__name__}PipelineNotificationRule",
             source=pipeline.pipeline,
             events=[
                 "codepipeline-pipeline-pipeline-execution-succeeded",
