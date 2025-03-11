@@ -185,14 +185,13 @@ class AbstractPipelineStack(Stack):
         account_configs: Dict[str, Dict[str, Any]]
     ) -> None:
         """Create deployment waves based on production vs non-production configs.
-
         Args:
             pipeline: The pipeline to add waves to.
             account_configs: Dictionary of account configurations.
         """
         dev_stages: List[tuple[str, str]] = []
         prod_stages: List[tuple[str, str]] = []
-        
+
         for config_name in account_configs:
             config_path = f"{self.pipeline_config.config_dir}/{config_name}.yml"
             if self.pipeline_config.prod_configs and config_name in self.pipeline_config.prod_configs:
@@ -206,14 +205,21 @@ class AbstractPipelineStack(Stack):
                 dev_wave.add_stage(self._create_stage_instance(config_name.capitalize(), config_path))
 
         if prod_stages:
+            approval_wave = pipeline.add_wave("ProductionApproval")
+            approval_wave.add_stage(
+                pipelines.Wave("ApprovalStage").add_pre(
+                    pipelines.ManualApprovalStep(
+                        "PromoteToProd",
+                        comment="Please review the development deployment and approve to proceed to production environments"
+                    )
+                )
+            )
+
+            # Add production wave
             prod_wave = pipeline.add_wave("Production")
             for config_name, config_path in prod_stages:
                 prod_wave.add_stage(
-                    self._create_stage_instance(config_name.capitalize(), config_path),
-                    pre=[pipelines.ManualApprovalStep(
-                        "PromoteToProd",
-                        comment="Please review the development deployment and approve to proceed to production environments"
-                    )]
+                    self._create_stage_instance(config_name.capitalize(), config_path)
                 )
 
     def _setup_notifications(self, pipeline: pipelines.CodePipeline) -> None:
@@ -227,8 +233,10 @@ class AbstractPipelineStack(Stack):
 
         topic = sns.Topic(self, "PipelineNotificationsTopic")
         
-        for email in self.pipeline_config.notification_emails:
-            subscriptions.EmailSubscription(email).bind(topic)
+        topic.add_subscription(
+            *[subscriptions.EmailSubscription(email) 
+              for email in self.pipeline_config.notification_emails]
+        )
         
         notifications.NotificationRule(
             self,

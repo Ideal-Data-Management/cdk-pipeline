@@ -7,7 +7,7 @@ A Python package for initializing and managing private CDK pipelines.
 This package is hosted in a private pip repository. To install, ensure you have access to the repository and install using:
 
 ```bash
-pip install cdk-pipeline
+pip install git+https://github.com/Ideal-Data-Management/cdk-pipeline.git@master
 ```
 
 ## Requirements
@@ -28,20 +28,17 @@ pip install cdk-pipeline
 ### Setting up the development environment
 
 1. Clone the repository:
+
 ```bash
-git clone git@github.com:nstokes-idm/cdk-pipeline.git
+git clone https://github.com/Ideal-Data-Management/cdk-pipeline.git
 cd cdk-pipeline
 ```
 
 2. Create and activate a virtual environment:
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install development dependencies:
-```bash
-pip install -e ".[dev]"
 ```
 
 ### Running Tests
