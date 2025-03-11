@@ -200,23 +200,21 @@ class AbstractPipelineStack(Stack):
                 dev_stages.append((config_name, config_path))
 
         if dev_stages:
-            dev_wave = pipeline.add_wave("Development")
+            dev_wave = pipeline.add_wave("DevelopmentDeployments")
             for config_name, config_path in dev_stages:
                 dev_wave.add_stage(self._create_stage_instance(config_name.capitalize(), config_path))
 
         if prod_stages:
             approval_wave = pipeline.add_wave("ProductionApproval")
-            approval_wave.add_stage(
-                pipelines.Wave("ApprovalStage").add_pre(
-                    pipelines.ManualApprovalStep(
-                        "PromoteToProd",
-                        comment="Please review the development deployment and approve to proceed to production environments"
-                    )
+            approval_wave.add_post(
+                pipelines.ManualApprovalStep(
+                    "PromoteToProd",
+                    comment="Please review the development deployment and approve to proceed to production environments"
                 )
             )
 
             # Add production wave
-            prod_wave = pipeline.add_wave("Production")
+            prod_wave = pipeline.add_wave("ProductionDeployments")
             for config_name, config_path in prod_stages:
                 prod_wave.add_stage(
                     self._create_stage_instance(config_name.capitalize(), config_path)
