@@ -97,7 +97,7 @@ class AbstractPipelineStack(Stack):
         """
         return pipelines.CodePipeline(
             self,
-            f"{self.stack_class.__name__}Pipeline",
+            "Pipeline",
             cross_account_keys=True,
             code_build_defaults=pipelines.CodeBuildOptions(
                 build_environment=codebuild.BuildEnvironment(
@@ -229,7 +229,7 @@ class AbstractPipelineStack(Stack):
         if not self.pipeline_config.notification_emails:
             return
 
-        topic = sns.Topic(self, f"{self.stack_class.__name__}PipelineNotificationsTopic")
+        topic = sns.Topic(self, "PipelineNotificationsTopic")
         
         topic.add_subscription(
             *[subscriptions.EmailSubscription(email) 
