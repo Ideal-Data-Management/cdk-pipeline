@@ -4,10 +4,11 @@ setup(
     name='cdk-pipeline',
     version='1.0.0',
     description='Private CDK Pipeline Initalizer',
-    url='git@github.com:nstokes-idm/cdk-pipeline.git',
+    url='https://github.com/Ideal-Data-Management/cdk-pipeline.git',
     author='Nathan Stokes',
     author_email='nstokes@idmservices.net',
-    license='unlicense',
+    license='MIT',
+    python_requires='>=3.7',
     packages=['cdk-pipeline'],
     zip_safe=False,
     install_requires=[
