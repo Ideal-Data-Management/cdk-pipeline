@@ -11,20 +11,24 @@ from aws_cdk import (
     aws_codestarnotifications as notifications
 )
 from constructs import Construct
-import yaml
-import glob
 import os
+from .config_loader import ConfigLoader
 
 @dataclass
 class AbstractPipelineConfig:
     """Configuration class for abstract CDK Pipeline settings.
 
-    Args:
+    This class defines the configuration parameters needed to set up a CDK pipeline
+    for multi-account deployments.
+
+    Attributes:
         connection_arn: AWS CodeStar connection ARN for GitHub.
-        github_repo: GitHub repository path.
+        github_repo: GitHub repository path in format 'owner/repo'.
         repo_branch: Git branch to use for deployments. Defaults to "master".
-        prod_configs: Set of configuration names considered as production. Defaults to None.
-        notification_emails: List of email addresses for pipeline notifications. Defaults to None.
+        prod_configs: Set of configuration names considered as production environments.
+            Defaults to None.
+        notification_emails: List of email addresses to receive pipeline notifications.
+            Defaults to None.
         cdk_version: Version of CDK to use. Defaults to "latest".
         config_dir: Directory containing configuration YAML files. Defaults to "configs".
     """
@@ -41,7 +45,13 @@ class AbstractPipelineStack(Stack):
     """Abstract base class for CDK Pipeline stacks.
 
     This class provides a reusable framework for creating multi-account deployment pipelines
-    that can work with any stack type and configuration parser.
+    that can work with any stack type and configuration parser. It handles the creation
+    of the pipeline, stages, and waves for development and production environments.
+
+    Attributes:
+        pipeline_config: Configuration settings for the pipeline.
+        stack_class: The class of the stack to be deployed.
+        stack_config_class: The class used to parse stack configuration.
 
     Args:
         scope: The scope in which to define this construct.
@@ -125,26 +135,18 @@ class AbstractPipelineStack(Stack):
 
         Raises:
             yaml.YAMLError: If YAML parsing fails.
+            KeyError: If referenced variables are not found.
+            FileNotFoundError: If included configuration files are not found.
         """
-        account_configs: Dict[str, Dict[str, Any]] = {}
-        config_pattern = os.path.join(self.pipeline_config.config_dir, "*.yml")
-        
-        for config_path in glob.glob(config_pattern):
-            config_name = os.path.splitext(os.path.basename(config_path))[0]
-            with open(config_path, 'r') as file:
-                yaml_content = yaml.safe_load(file)
-                account = yaml_content.get('account', {})
-                account_configs[config_name] = {
-                    'config_path': config_path,
-                    'full_config': yaml_content,
-                    'aws_account': account.get('aws_account'),
-                    'aws_region': account.get('aws_region')
-                }
-
-        return account_configs
+        config_loader = ConfigLoader(self.pipeline_config.config_dir)
+        return config_loader.load_account_configs()
 
     def _create_stage_instance(self, config_name: str, config_path: str, **kwargs: Any) -> Stage:
         """Create a new stage instance with the specified configuration.
+
+        This method creates a new deployment stage that will contain the stack
+        to be deployed. It loads and processes the configuration file, handles
+        includes, and sets up the environment for the stack.
 
         Args:
             config_name: Name of the configuration to use.
@@ -152,19 +154,23 @@ class AbstractPipelineStack(Stack):
             **kwargs: Additional keyword arguments for stage creation.
 
         Returns:
-            A configured Stage instance.
+            A configured Stage instance ready for deployment.
 
         Raises:
             ValueError: If there's an error in configuration parsing.
             RuntimeError: If there's an unexpected error during stage creation.
         """
+        config_loader = ConfigLoader(self.pipeline_config.config_dir)
+
         class DeploymentStage(Stage):
             def __init__(self_stage: Stage, scope: Construct, id: str, **kwargs: Any) -> None:
                 super().__init__(scope, id, **kwargs)
 
-                with open(config_path, 'r') as file:
-                    yaml_content = yaml.safe_load(file)
-                    account_info = yaml_content.get('account', {})
+                # Load and process the configuration using ConfigLoader
+                yaml_content = config_loader.load_yaml_file(config_path)
+                if 'include' in yaml_content:
+                    yaml_content = config_loader._process_includes(yaml_content, os.path.dirname(config_path))
+                account_info = yaml_content.get('account', {})
 
                 config = self.stack_config_class(yaml_content)
                 self.stack_class(
@@ -185,24 +191,32 @@ class AbstractPipelineStack(Stack):
         account_configs: Dict[str, Dict[str, Any]]
     ) -> None:
         """Create deployment waves based on production vs non-production configs.
+
+        This method organizes the deployment stages into waves, separating development
+        and production environments. Production deployments include a manual approval
+        step before proceeding.
+
         Args:
             pipeline: The pipeline to add waves to.
-            account_configs: Dictionary of account configurations.
+            account_configs: Dictionary of account configurations, where keys are
+                config names and values are configuration details.
         """
-        dev_stages: List[tuple[str, str]] = []
-        prod_stages: List[tuple[str, str]] = []
+        dev_stages: List[tuple[str, Dict[str, Any]]] = []
+        prod_stages: List[tuple[str, Dict[str, Any]]] = []
 
-        for config_name in account_configs:
-            config_path = f"{self.pipeline_config.config_dir}/{config_name}.yml"
+        for config_name, config_data in account_configs.items():
             if self.pipeline_config.prod_configs and config_name in self.pipeline_config.prod_configs:
-                prod_stages.append((config_name, config_path))
+                prod_stages.append((config_name, config_data))
             else:
-                dev_stages.append((config_name, config_path))
+                dev_stages.append((config_name, config_data))
 
         if dev_stages:
             dev_wave = pipeline.add_wave("DevelopmentDeployments")
-            for config_name, config_path in dev_stages:
-                dev_wave.add_stage(self._create_stage_instance(config_name.capitalize(), config_path))
+            for config_name, config_data in dev_stages:
+                dev_wave.add_stage(self._create_stage_instance(
+                    config_name.capitalize(),
+                    config_data['config_path']
+                ))
 
         if prod_stages:
             approval_wave = pipeline.add_wave("ProductionApproval")
@@ -215,13 +229,20 @@ class AbstractPipelineStack(Stack):
 
             # Add production wave
             prod_wave = pipeline.add_wave("ProductionDeployments")
-            for config_name, config_path in prod_stages:
+            for config_name, config_data in prod_stages:
                 prod_wave.add_stage(
-                    self._create_stage_instance(config_name.capitalize(), config_path)
+                    self._create_stage_instance(
+                        config_name.capitalize(),
+                        config_data['config_path']
+                    )
                 )
 
     def _setup_notifications(self, pipeline: pipelines.CodePipeline) -> None:
         """Set up pipeline notifications for the provided email addresses.
+
+        This method creates an SNS topic and notification rule to send pipeline
+        status updates to the configured email addresses. Notifications are sent
+        for pipeline execution success, failure, and when manual approval is needed.
 
         Args:
             pipeline: The pipeline to set up notifications for.

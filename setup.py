@@ -2,11 +2,11 @@ from setuptools import setup
 
 setup(
     name='cdk_pipeline',
-    version='1.0.0',
+    version='1.1.0',
     description='Private CDK Pipeline Initalizer',
     url='https://github.com/Ideal-Data-Management/cdk-pipeline.git',
-    author='Nathan Stokes',
-    author_email='nstokes@idmservices.net',
+    author='Ideal Data Management',
+    author_email='dev@idmservices.net',
     license='MIT',
     python_requires='>=3.7',
     packages=['cdk_pipeline'],
